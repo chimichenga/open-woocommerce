@@ -79,6 +79,7 @@ function init_woocommerce_allsecure() {
 			add_action( 'woocommerce_order_refunded', array($this, 'action_woocommerce_order_refunded'), 10, 2 );
 			add_action( 'woocommerce_order_action_allsecure_capture', array( $this, 'capture_payment' ) );
 			add_action( 'woocommerce_order_action_allsecure_reverse', array( $this, 'reverse_payment' ) );
+			add_action( 'woocommerce_order_action_allsecure_cancel_schedule', array( $this, 'cancel_schedule' ) );
 			/* add_action to parse values to thankyou*/
 			add_action( 'woocommerce_thankyou', array( $this, 'report_payment' ) );
 			add_action( 'woocommerce_thankyou', array( $this,'parse_value_allsecure_success_page') );
@@ -294,24 +295,53 @@ function init_woocommerce_allsecure() {
 		function payment_fields() {
 			if ($this->description) echo wpautop(wptexturize($this->description));
 		}
+
+		function is_recurring_donation( $order_id ){
+			global $woocommerce;
+			$order = new WC_Order( $order_id );
+			$order_items = $order->get_items();
+			// Render registration form only if one recurring-type product is present
+			if( count($order_items) == 1 ){
+				$item = array_values($order_items)[0];
+				$product_id = $item->get_product_id();
+				$product = wc_get_product( $product_id );
+				if( $product->is_type('donation') && get_post_meta( $product_id, '_recurring_donation', true ) == 'yes')
+					return true;
+				else
+					return false;
+			} else
+				return false;
+		}
+		function get_recurring_interval( $order_id ){
+			global $woocommerce;
+			$order = new WC_Order( $order_id );
+			$order_items = $order->get_items();
+			$item = array_values($order_items)[0];
+			$product_id = $item->get_product_id();
+			return get_post_meta( $product_id, '_recurring_interval', true );
+		}
+
 		/* Creating AllSecure Payment Form. */
-		public function generate_allsecure_payment_form( $order_id ){
+		function generate_allsecure_payment_form( $order_id ){
 			global $woocommerce;
 			$order = new WC_Order( $order_id );
 			/* Required Order Details */
 			$amount 	= $order->get_total();
 			$currency 	= get_woocommerce_currency();
 			$url = $this->allsecure_url."/v1/checkouts";
-			$data = "entityId=".$this->ENTITY_ID 
-			. "&amount=".$amount 
-			. "&currency=".$currency 
-			. "&merchantTransactionId=". $order_id 
-			. "&customParameters[MERCHANT_name]=".$this->merchantName 
-			. "&customParameters[MERCHANT_email]=".$this->merchantEmail 
-			. "&customParameters[MERCHANT_shopurl]=".$this->shopURL 
-			. "&customParameters[MERCHANT_pluginID]=".$this->allsecureID 
+			$data = "entityId=".$this->ENTITY_ID
+			. "&amount=".$amount
+			. "&currency=".$currency
+			. "&merchantTransactionId=".$order_id
+			. "&customParameters[MERCHANT_name]=".$this->merchantName
+			. "&customParameters[MERCHANT_email]=".$this->merchantEmail
+			. "&customParameters[MERCHANT_shopurl]=".$this->shopURL
+			. "&customParameters[MERCHANT_pluginID]=".$this->allsecureID
 			. "&customParameters[MERCHANT_pg]=asbpgw"
-			. "&paymentType=".$this->paymentType ;
+			. "&paymentType=".$this->paymentType;
+			if ( $this->is_recurring_donation( $order_id ) )
+				$data .= "&createRegistration=true";
+
 			if($this->operation == 'test'){
 				$data .= "&customParameters[forceResultCode]=".$this->forceResultCode ;
 			}
@@ -397,6 +427,8 @@ function init_woocommerce_allsecure() {
 							return false; }
 						return true;}
 					} </script>';
+					if ( $this->is_recurring_donation( $order_id ) )
+						echo '<div class="allsecure-notice">'.__('Your payment info will be saved for future automatic payments.', 'allsecure_woo').'</div>';
 					echo '<div id="allsecure_merchant_info"><b>'.__('Merchant', 'allsecure_woo' ).': </b>'. $this->merchantName.'</div>';
 					if ($this->operation == 'test') echo '<div class="testmode">' . __( 'This is the TEST MODE. No money will be charged', 'allsecure_woo' ) . '</div>';
 					echo '<div id="allsecure_payment_container">';
@@ -410,6 +442,7 @@ function init_woocommerce_allsecure() {
 				}
 			}
 		}
+
 		/* Updating the Payment Status and redirect to Success/Fail Page */
 		public function allsecure_process(){
 			global $woocommerce;
@@ -436,15 +469,17 @@ function init_woocommerce_allsecure() {
 					}
 					$status = json_decode($gtwresponse['body']);
 					$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
-					$order = new WC_Order($status->merchantTransactionId );
+					$order = new WC_Order( $status->merchantTransactionId );
 					if(in_array($status->result->code, $success_code)){
 						$order->payment_complete( $status->id );
 						$order->add_order_note(sprintf(__('AllSecure Transaction Successful. The Transaction ID was %s and Payment Status %s. Payment type was %s. Autorizacion bank code: %s', 'allsecure_woo'), $status->id, $status->result->description, $status->paymentType, $status->resultDetails->ConnectorTxID3 ));
 						$message = sprintf(__('Transaction Successful. The status message <b>%s</b>', 'allsecure_woo'), $status->result->description );
 						$bank_code = $status->resultDetails;
 						$astrxId = $status->id;
+
 						update_post_meta( $order->id, 'bank_code', $bank_code );
 						update_post_meta( $order->id, 'AS-TrxId', $astrxId );
+
 						WC()->cart->empty_cart();
 						/* Add content to the WC emails. */
 						$query = parse_url( $this->get_return_url( $order ), PHP_URL_QUERY);
@@ -466,7 +501,15 @@ function init_woocommerce_allsecure() {
 						else {
 							$order->update_status('wc-preauth');
 						}
-					exit;
+						// Schedule request for recurring payments
+						if ( $this->is_recurring_donation( $order->id ) ){
+							$registrationId = $status->registrationId;
+							$interval = $this->get_recurring_interval($status->merchantTransactionId);
+							update_post_meta( $order->id, 'AS-RegId', $registrationId );
+							update_post_meta( $order->id, 'AS-SchInt', $interval );
+							$is_scheduled = $this->schedule_payment( $order->id, $registrationId, $interval );
+						}
+						exit;
 					}
 					else {
 						include_once( dirname( __FILE__ ) . '/includes/error_list.php' );
@@ -633,6 +676,90 @@ function init_woocommerce_allsecure() {
 			}
 			echo 'Error in communication';
 		}
+
+		// Scheduling Payments
+		function schedule_payment( $order_id, $order_reg_id_allsecure, $interval ){
+			global $woocommerce;
+			$order = wc_get_order( $order_id );
+			$amount 	= $order->get_total();
+			$currency 	= get_woocommerce_currency();
+			$response = json_decode($this->schedule_request( $order_reg_id_allsecure, $amount, $currency, $interval ));
+			$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
+			if(in_array($response->result->code, $success_code)){
+				$order->add_order_note(sprintf(__('AllSecure Payment Scheduling Successful. The Schedule ID: %s', 'allsecure_woo'), $response->id ));
+				update_post_meta( $order_id, 'AS-SchId', $response->id );
+				$order->update_status('wc-scheduled');
+				return true;
+			}
+			else {
+				$order->add_order_note(sprintf(__('AllSecure Payment Scheduling Failed. The Schedule Status: %s', 'allsecure_woo'), $response->result->description ));
+				return false;
+			}
+			return false;
+		}
+		function schedule_request( $order_reg_id_allsecure, $amount, $currency, $interval ){
+			$url = $this->allsecure_url."/scheduling/v1/schedules";
+			$data = "entityId=".$this->ENTITY_ID .
+			"&registrationId=".$order_reg_id_allsecure .
+			"&amount=".$amount .
+			"&currency=".$currency .
+			"&paymentType=".$this->paymentType;
+			if( $interval == 'month' )
+				$data .= "&job.month=*&job.dayOfMonth=1";
+			else if( $interval == 'year' )
+				$data .= "&job.year=*";
+
+			$head_data = "Bearer ". $this->ACCESS_TOKEN;
+			$gtwresponse = wp_remote_post(
+				$url,
+				array(
+					'headers' => array('Authorization' => $head_data),
+					'body' => $data,
+					'sslverify' => 'true', // this should be set to true in production
+					'timeout' => 100,
+				)
+			);
+			if( !is_wp_error( $gtwresponse ) ) {
+				return $gtwresponse['body'];
+			}
+			echo 'Error in communication';
+		}
+		function cancel_schedule( $order_id ){
+			global $woocommerce;
+			$order = wc_get_order( $order_id );
+			$order_sch_id_allsecure = $order->get_meta('AS-SchId');
+
+			$response = json_decode($this->cancel_schedule_request($order_sch_id_allsecure));
+			$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
+			if(in_array($response->result->code, $success_code)){
+				$order->add_order_note(sprintf(__('AllSecure Canceling Schedule Successful. The Schedule Cancellation ID: %s', 'allsecure_woo'), $response->id ));
+				$order->update_status('wc-canceled-schedule');
+				return true;
+			}
+			else {
+				$order->add_order_note(sprintf(__('AllSecure Canceling Schedule Failed. The Schedule Cancellation Status: %s', 'allsecure_woo'), json_encode($response->result) ));
+				return false;
+			}
+			return false;
+		}
+		function cancel_schedule_request( $order_sch_id_allsecure ){
+			$url = $this->allsecure_url."/scheduling/v1/schedules/".$order_sch_id_allsecure."?entityId=".$this->ENTITY_ID;
+			$head_data = "Bearer ". $this->ACCESS_TOKEN;
+			$gtwresponse = wp_remote_request(
+				$url,
+				array(
+					'headers' => array('Authorization' => $head_data),
+					'sslverify' => 'true', // this should be set to true in production
+					'timeout' => 100,
+					'method' => 'DELETE'
+				)
+			);
+			if( !is_wp_error( $gtwresponse ) ) {
+				return $gtwresponse['body'];
+			}
+			echo 'Error in communication';
+		}
+
 		// Custom function not required by the Gateway
 		public function do_ssl_check() {
 			if( $this->enabled == "yes" ) {

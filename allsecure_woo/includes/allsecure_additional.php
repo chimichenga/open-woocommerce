@@ -22,12 +22,22 @@ function add_custom_order_for_accepted( $actions ) {
 	$actions['allsecure_reverse'] = __( 'AllSecure Reverse', 'woocommerce' );
 	return $actions;
 }
+add_action( 'woocommerce_order_actions', 'add_custom_order_for_scheduled', 10 ,1 );
+function add_custom_order_for_scheduled( $actions ) {
+	global $theorder;	
+	/* Action will show only if status is 'scheduled' */
+	if ( ! $theorder->has_status( array( 'scheduled' ) ) ) {
+		return $actions;
+	}
+	$actions['allsecure_cancel_schedule'] = __( 'AllSecure Cancel Schedule', 'woocommerce' );
+	return $actions;
+}
 
 /* Show Statuses in Admin Panel */
 add_action( 'init', 'add_custom_order_status' );function add_custom_order_status() {
 	register_post_status( 'wc-preauth', 
 		array(
-			'label'                     => _x( 'preauth', 'WooCommerce Order Status', 'woo-allsecure-gateway' ),
+			'label'                     => _x( 'Preauth', 'WooCommerce Order Status', 'woo-allsecure-gateway' ),
 			'public'                    => true,
 			'exclude_from_search'       => false,
 			'show_in_admin_all_list'    => true,
@@ -57,6 +67,26 @@ add_action( 'init', 'add_custom_order_status' );function add_custom_order_status
 			'label_count'               => _n_noop( 'Reversed <span class="count">(%s)</span>', 'Reversed <span class="count">(%s)</span>' )
 		)
 	);
+	register_post_status( 'wc-scheduled', 
+		array(
+			'label'                     => _x( 'Scheduled', 'WooCommerce Order Status', 'woo-allsecure-gateway' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'Scheduled <span class="count">(%s)</span>', 'Scheduled <span class="count">(%s)</span>' )
+		)
+	);
+	register_post_status( 'wc-canceled-schedule', 
+		array(
+			'label'                     => _x( 'Canceled Schedule', 'WooCommerce Order Status', 'woo-allsecure-gateway' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'Canceled Schedule <span class="count">(%s)</span>', 'Canceled Schedule <span class="count">(%s)</span>' )
+		)
+	);
 }
 
 /* Add new order statuses to woocommerce */
@@ -65,6 +95,8 @@ function add_order_statuses( $order_status ) {
 	$order_status['wc-preauth'] = _x( 'Preauth', 'Preauth Order Status', 'woo-allsecure-gateway' );
 	$order_status['wc-accepted'] = _x( 'Accepted', 'Accepted Order Status', 'woo-allsecure-gateway' );
 	$order_status['wc-reversed'] = _x( 'Reversed', 'Reversed Order Status', 'woo-allsecure-gateway' );
+	$order_status['wc-scheduled'] = _x( 'Scheduled', 'Scheduled Order Status', 'woo-allsecure-gateway' );
+	$order_status['wc-canceled-schedule'] = _x( 'Canceled Schedule', 'Canceled Schedule Order Status', 'woo-allsecure-gateway' );
 	return $order_status;
 }  
  
@@ -74,14 +106,16 @@ function change_statuses_order( $wc_statuses_arr ){
 	$new_statuses_arr = array(
 		'wc-preauth' => $wc_statuses_arr['wc-preauth'], // 1
 		'wc-accepted' => $wc_statuses_arr['wc-accepted'], // 2
-		'wc-reversed' => $wc_statuses_arr['wc-reversed'], // 3	
-		'wc-processing' => $wc_statuses_arr['wc-processing'], //4
-		'wc-completed' => $wc_statuses_arr['wc-completed'], //5
-		'wc-cancelled' => $wc_statuses_arr['wc-cancelled'], 	//6
-		'wc-failed' => $wc_statuses_arr['wc-failed'], // 7
-		'wc-pending' => $wc_statuses_arr['wc-pending'], // 8
-		'wc-on-hold' => $wc_statuses_arr['wc-on-hold'], // 9
-		'wc-refunded' => $wc_statuses_arr['wc-refunded'] // 10
+		'wc-reversed' => $wc_statuses_arr['wc-reversed'], // 3
+		'wc-scheduled' => $wc_statuses_arr['wc-scheduled'], // 4
+		'wc-canceled-schedule' => $wc_statuses_arr['wc-canceled-schedule'], // 5
+		'wc-processing' => $wc_statuses_arr['wc-processing'], // 6
+		'wc-completed' => $wc_statuses_arr['wc-completed'], // 7
+		'wc-cancelled' => $wc_statuses_arr['wc-cancelled'], // 8
+		'wc-failed' => $wc_statuses_arr['wc-failed'], // 9
+		'wc-pending' => $wc_statuses_arr['wc-pending'], // 10
+		'wc-on-hold' => $wc_statuses_arr['wc-on-hold'], // 11
+		'wc-refunded' => $wc_statuses_arr['wc-refunded'] // 12
 	);		
 	return $new_statuses_arr;
 }

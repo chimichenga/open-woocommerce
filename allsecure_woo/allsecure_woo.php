@@ -1,6 +1,6 @@
 <?php
 /**
-* Plugin Name: AllSecure Open Woo
+* Plugin Name: AllSecure Open Woo - Schedule
 * Plugin URI: https://www.allsecpay.com
 * Author: AllSecure 
 * Description: WooCommerce Plugin for accepting payments through AllSecure OPEN Platform.

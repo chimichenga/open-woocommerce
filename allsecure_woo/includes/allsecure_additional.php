@@ -135,13 +135,33 @@ function hide_wc_refund_button() {
 	global $post;
 	/* Here you can choose from which user roles to hide button from */
 	if (!current_user_can('administrator') || current_user_can('editor') || current_user_can('author') || current_user_can('contributor') || current_user_can('subscriber')  ) {
-        return;
-    }
-    if (strpos($_SERVER['REQUEST_URI'], 'post.php?post=') === false) {
-        return;
-    }
-    if (empty($post) || $post->post_type != 'shop_order') {
-        return;
-    }
+		return;
+	}
+	if (strpos($_SERVER['REQUEST_URI'], 'post.php?post=') === false) {
+		return;
+	}
+	if (empty($post) || $post->post_type != 'shop_order') {
+		return;
+	}
 	?><script>jQuery(function () { jQuery('.refund-items').hide(); jQuery('.order_actions option[value=send_email_customer_refunded_order]').remove(); if (jQuery('#original_post_status').val()=='wc-refunded') {jQuery('#s2id_order_status').html('Refunded'); } else { jQuery('#order_status option[value=wc-refunded]').remove(); } }); </script><?php
+}
+
+// 2. Add Order Actions @ My Account
+// add_filter( 'woocommerce_my_account_my_orders_actions', 'as_cancel_schedule_my_account_orders_actions', 50, 2 );
+  
+function as_cancel_schedule_my_account_orders_actions( $actions, $order ) {
+	if ( $order->has_status( 'scheduled' ) ) {
+		// http://localhost:8080/liceulice/wp-admin/post.php?post=7611&action=trash&_wpnonce=249866d481
+
+		// $actions['allsecure_cancel_schedule'] = array(
+		// 	'url'  => wp_nonce_url( add_query_arg( array( 'allsecure_cancel_schedule' => $order->get_id() ) ), 'allsecure_cancel_schedule' ),
+		// 	'name' => __( 'Cancel schedule', 'woo-allsecure-gateway' )
+		// );
+		$actions['allsecure_cancel_schedule'] = array(
+			'url'  => wp_nonce_url( '/liceulice/wp-admin/post.php?post='. $order->get_id() .'&action=allsecure_cancel_schedule', 'allsecure_cancel_schedule' ),
+			'name' => __( 'Cancel schedule', 'woo-allsecure-gateway' )
+		);
+		// woocommerce_order_action_allsecure_cancel_schedule
+	}
+	return $actions;
 }

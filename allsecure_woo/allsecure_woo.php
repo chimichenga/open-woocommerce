@@ -89,6 +89,7 @@ function init_woocommerce_allsecure() {
 			add_action( 'admin_notices', array( $this, 'do_ssl_check' ) );
 			wp_enqueue_style( 'allsecure_style', plugin_dir_url( __FILE__ ) . 'assets/css/allsecure-style.css', array(), null );
 		}
+
 		/* Woocommerce Admin Panel Option Manage AllSecure Settings here. */
 		public function admin_options() {
 			echo '<h2>'. __('AllSecure Payment Gateway', 'allsecure_woo') .' </h2>';
@@ -537,7 +538,7 @@ function init_woocommerce_allsecure() {
 			$order = new WC_Order( $order_id );
 			if($this->woocommerce_version >= 2.1){
 				$redirect = $order->get_checkout_payment_url( true );
-				}
+			}
 			else{
 				$redirect = add_query_arg('order', $order->id, add_query_arg('key', $order->order_key, get_permalink(get_option('woocommerce_pay_page_id'))));
 			}

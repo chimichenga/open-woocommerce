@@ -147,21 +147,30 @@ function hide_wc_refund_button() {
 }
 
 // 2. Add Order Actions @ My Account
-// add_filter( 'woocommerce_my_account_my_orders_actions', 'as_cancel_schedule_my_account_orders_actions', 50, 2 );
-  
+add_filter( 'woocommerce_my_account_my_orders_actions', 'as_cancel_schedule_my_account_orders_actions', 50, 2 );  
 function as_cancel_schedule_my_account_orders_actions( $actions, $order ) {
 	if ( $order->has_status( 'scheduled' ) ) {
-		// http://localhost:8080/liceulice/wp-admin/post.php?post=7611&action=trash&_wpnonce=249866d481
-
-		// $actions['allsecure_cancel_schedule'] = array(
-		// 	'url'  => wp_nonce_url( add_query_arg( array( 'allsecure_cancel_schedule' => $order->get_id() ) ), 'allsecure_cancel_schedule' ),
-		// 	'name' => __( 'Cancel schedule', 'woo-allsecure-gateway' )
-		// );
 		$actions['allsecure_cancel_schedule'] = array(
-			'url'  => wp_nonce_url( '/liceulice/wp-admin/post.php?post='. $order->get_id() .'&action=allsecure_cancel_schedule', 'allsecure_cancel_schedule' ),
-			'name' => __( 'Cancel schedule', 'woo-allsecure-gateway' )
+			'url'  => wp_nonce_url( admin_url( 'admin-ajax.php?action=allsecure_cancel_schedule&order='.$order->get_id() ), 'allsecure_cancel_schedule' ),
+			'name' => _x( 'Cancel', 'Cancel scheduled payment', 'woo-allsecure-gateway' )
 		);
-		// woocommerce_order_action_allsecure_cancel_schedule
 	}
 	return $actions;
 }
+
+// add_action('wp_ajax_nopriv_allsecure_cancel_schedule', 'no_test_action' );
+add_action('wp_ajax_allsecure_cancel_schedule', 'allsecure_cancel_schedule' );
+function allsecure_cancel_schedule(){
+	if( !check_admin_referer( 'allsecure_cancel_schedule' ) ){
+		echo 'You are not allowed on this page.';
+		exit;
+	}
+	$allsecure = new woocommerce_allsecure();
+	if( !$allsecure->cancel_schedule($_REQUEST['order']) ){
+		echo 'There was an error processing your request!';
+		exit;
+	}
+	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
+	exit;
+}
+

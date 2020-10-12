@@ -80,6 +80,7 @@ function init_woocommerce_allsecure() {
 			add_action( 'woocommerce_order_action_allsecure_capture', array( $this, 'capture_payment' ) );
 			add_action( 'woocommerce_order_action_allsecure_reverse', array( $this, 'reverse_payment' ) );
 			add_action( 'woocommerce_order_action_allsecure_cancel_schedule', array( $this, 'cancel_schedule' ) );
+			add_action( 'woocommerce_order_action_allsecure_cancel_recurring', array( $this, 'cancel_recurring' ) );
 			/* add_action to parse values to thankyou*/
 			add_action( 'woocommerce_thankyou', array( $this, 'report_payment' ) );
 			add_action( 'woocommerce_thankyou', array( $this,'parse_value_allsecure_success_page') );
@@ -460,7 +461,7 @@ function init_woocommerce_allsecure() {
 						'sslverify' => true,
 						'timeout'	=> 45 
 					)
-				); 
+				);
 				if( !is_wp_error( $gtwresponse ) ) {
 					$merchant_info = $this->allsecure_get_general_merchant_info();
 					$tracking_url = 'https://api.allsecpay.xyz/tracker';
@@ -502,13 +503,14 @@ function init_woocommerce_allsecure() {
 						else {
 							$order->update_status('wc-preauth');
 						}
-						// Schedule request for recurring payments
+						// Saving info for recurring payments
 						if ( $this->is_recurring_donation( $order->id ) ){
 							$registrationId = $status->registrationId;
 							$interval = $this->get_recurring_interval($status->merchantTransactionId);
-							update_post_meta( $order->id, 'AS-RegId', $registrationId );
-							update_post_meta( $order->id, 'AS-SchInt', $interval );
-							$is_scheduled = $this->schedule_payment( $order->id, $registrationId, $interval );
+							update_post_meta( $order->id, '_as_regid', $registrationId );
+							update_post_meta( $order->id, '_as_recint', $interval );
+							update_post_meta( $order->id, '_as_recactive', 'yes' );
+							// $this->schedule_payment( $order->id, $registrationId, $interval );
 						}
 						exit;
 					}
@@ -678,6 +680,56 @@ function init_woocommerce_allsecure() {
 			echo 'Error in communication';
 		}
 
+		// Recurring Payments
+		function recurring_payment( $order_id ){
+			global $woocommerce;
+			global $wpdb;
+			$order = wc_get_order( $order_id );
+			$amount 	= $order->get_total();
+			$currency 	= get_woocommerce_currency();
+			$registrationId = $order->get_meta( '_as_regid' );
+			$response = json_decode($this->recurring_request( $registrationId, $amount, $currency, $interval ));
+			$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
+			if(in_array($response->result->code, $success_code)){
+				$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. The response ID: %s. Payment type was %s.', 'allsecure_woo'), $response->id, $response->paymentType ));
+				$order->payment_complete( $response->id );
+
+				if(in_array($status->paymentType, array('DB') ))
+					$order->update_status('wc-accepted');
+				else
+					$order->update_status('wc-preauth');
+				return true;
+			}
+			else {
+				$order->add_order_note(sprintf(__('AllSecure Recurring Payment Failed. The Payment Status: %s', 'allsecure_woo'), $response->result->description ));
+				return false;
+			}
+			return false;
+		}
+		function recurring_request( $registrationId, $amount, $currency, $interval ){
+			$url = $this->allsecure_url."/v1/registrations/".$registrationId."/payments";
+			$data = "entityId=".$this->ENTITY_ID .
+			"&amount=".$amount .
+			"&currency=".$currency .
+			"&recurringType=REPEATED" .
+			"&paymentType=".$this->paymentType;
+
+			$head_data = "Bearer ". $this->ACCESS_TOKEN;
+			$gtwresponse = wp_remote_post(
+				$url,
+				array(
+					'headers' => array('Authorization' => $head_data),
+					'body' => $data,
+					'sslverify' => 'true', // this should be set to true in production
+					'timeout' => 100,
+				)
+			);
+			if( !is_wp_error( $gtwresponse ) ) {
+				return $gtwresponse['body'];
+			}
+			echo 'Error in communication';
+		}
+
 		// Scheduling Payments
 		function schedule_payment( $order_id, $order_reg_id_allsecure, $interval ){
 			global $woocommerce;
@@ -688,7 +740,7 @@ function init_woocommerce_allsecure() {
 			$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
 			if(in_array($response->result->code, $success_code)){
 				$order->add_order_note(sprintf(__('AllSecure Payment Scheduling Successful. The Schedule ID: %s', 'allsecure_woo'), $response->id ));
-				update_post_meta( $order_id, 'AS-SchId', $response->id );
+				update_post_meta( $order_id, '_as_schid', $response->id );
 				$order->update_status('wc-scheduled');
 				return true;
 			}
@@ -728,7 +780,7 @@ function init_woocommerce_allsecure() {
 		function cancel_schedule( $order_id ){
 			global $woocommerce;
 			$order = wc_get_order( $order_id );
-			$order_sch_id_allsecure = $order->get_meta('AS-SchId');
+			$order_sch_id_allsecure = $order->get_meta('_as_schid');
 
 			$response = json_decode($this->cancel_schedule_request($order_sch_id_allsecure));
 			$success_code = array('000.000.000', '000.000.100', '000.100.110', '000.100.111', '000.100.112', '000.300.000');
@@ -759,6 +811,20 @@ function init_woocommerce_allsecure() {
 				return $gtwresponse['body'];
 			}
 			echo 'Error in communication';
+		}
+
+		function cancel_recurring( $order_id ){
+			global $woocommerce;
+			$order = wc_get_order( $order_id );
+
+			$status = update_post_meta( $order->get_id(), '_as_recactive', 'no' );
+			if ( $status ) {
+				$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecure_woo') ));
+				return true;
+			} else {
+				$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecure_woo') ));
+				return false;
+			}
 		}
 
 		// Custom function not required by the Gateway

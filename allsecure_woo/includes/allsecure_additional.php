@@ -22,6 +22,7 @@ function add_custom_order_for_accepted( $actions ) {
 	$actions['allsecure_reverse'] = __( 'AllSecure Reverse', 'woocommerce' );
 	return $actions;
 }
+
 add_action( 'woocommerce_order_actions', 'add_custom_order_for_scheduled', 10 ,1 );
 function add_custom_order_for_scheduled( $actions ) {
 	global $theorder;	
@@ -30,6 +31,17 @@ function add_custom_order_for_scheduled( $actions ) {
 		return $actions;
 	}
 	$actions['allsecure_cancel_schedule'] = __( 'AllSecure Cancel Schedule', 'woocommerce' );
+	return $actions;
+}
+
+add_action( 'woocommerce_order_actions', 'add_custom_order_for_recurring', 10 ,1 );
+function add_custom_order_for_recurring( $actions ) {
+	global $theorder;	
+	/* Action will show only if status is 'scheduled' */
+	if ( $theorder->get_meta( '_as_recactive' ) !== 'yes' ) {
+		return $actions;
+	}
+	$actions['allsecure_cancel_recurring'] = __( 'AllSecure Cancel Recurring', 'woocommerce' );
 	return $actions;
 }
 
@@ -147,18 +159,23 @@ function hide_wc_refund_button() {
 }
 
 // 2. Add Order Actions @ My Account
-add_filter( 'woocommerce_my_account_my_orders_actions', 'as_cancel_schedule_my_account_orders_actions', 50, 2 );  
-function as_cancel_schedule_my_account_orders_actions( $actions, $order ) {
+add_filter( 'woocommerce_my_account_my_orders_actions', 'as_my_account_orders_actions', 50, 2 );  
+function as_my_account_orders_actions( $actions, $order ) {
 	if ( $order->has_status( 'scheduled' ) ) {
 		$actions['allsecure_cancel_schedule'] = array(
 			'url'  => wp_nonce_url( admin_url( 'admin-ajax.php?action=allsecure_cancel_schedule&order='.$order->get_id() ), 'allsecure_cancel_schedule' ),
 			'name' => _x( 'Cancel', 'Cancel scheduled payment', 'woo-allsecure-gateway' )
 		);
 	}
+	if ( $order->get_meta( '_as_recactive' ) == 'yes' ) {
+		$actions['allsecure_cancel_recurring'] = array(
+			'url'  => wp_nonce_url( admin_url( 'admin-ajax.php?action=allsecure_cancel_recurring&order='.$order->get_id() ), 'allsecure_cancel_recurring' ),
+			'name' => _x( 'Cancel', 'Cancel recurring payment', 'woo-allsecure-gateway' )
+		);
+	}
 	return $actions;
 }
 
-// add_action('wp_ajax_nopriv_allsecure_cancel_schedule', 'no_test_action' );
 add_action('wp_ajax_allsecure_cancel_schedule', 'allsecure_cancel_schedule' );
 function allsecure_cancel_schedule(){
 	if( !check_admin_referer( 'allsecure_cancel_schedule' ) ){
@@ -174,3 +191,14 @@ function allsecure_cancel_schedule(){
 	exit;
 }
 
+add_action('wp_ajax_allsecure_cancel_recurring', 'allsecure_cancel_recurring' );
+function allsecure_cancel_recurring(){
+	if( !check_admin_referer( 'allsecure_cancel_recurring' ) ){
+		echo 'You are not allowed on this page.';
+		exit;
+	}
+	update_post_meta( $_REQUEST['order'], '_as_recactive', 'no' );
+	
+	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
+	exit;
+}

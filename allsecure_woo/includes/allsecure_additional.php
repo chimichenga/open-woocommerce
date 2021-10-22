@@ -38,7 +38,7 @@ add_action( 'woocommerce_order_actions', 'add_custom_order_for_recurring', 10 ,1
 function add_custom_order_for_recurring( $actions ) {
 	global $theorder;	
 	/* Action will show only if status is 'scheduled' */
-	if ( $theorder->get_meta( '_as_recactive' ) !== 'yes' ) {
+	if ( $theorder->get_meta( 'AS_RecurringActive' ) !== 'yes' ) {
 		return $actions;
 	}
 	$actions['allsecure_cancel_recurring'] = __( 'AllSecure Cancel Recurring', 'woocommerce' );
@@ -167,7 +167,7 @@ function as_my_account_orders_actions( $actions, $order ) {
 			'name' => _x( 'Cancel', 'Cancel scheduled payment', 'woo-allsecure-gateway' )
 		);
 	}
-	if ( $order->get_meta( '_as_recactive' ) == 'yes' ) {
+	if ( $order->get_meta( 'AS_RecurringActive' ) == 'yes' ) {
 		$actions['allsecure_cancel_recurring'] = array(
 			'url'  => wp_nonce_url( admin_url( 'admin-ajax.php?action=allsecure_cancel_recurring&order='.$order->get_id() ), 'allsecure_cancel_recurring' ),
 			'name' => _x( 'Cancel', 'Cancel recurring payment', 'woo-allsecure-gateway' )
@@ -197,7 +197,7 @@ function allsecure_cancel_recurring(){
 		echo 'You are not allowed on this page.';
 		exit;
 	}
-	update_post_meta( $_REQUEST['order'], '_as_recactive', 'no' );
+	update_post_meta( $_REQUEST['order'], 'AS_RecurringActive', 'no' );
 	
 	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
 	exit;

@@ -1,6 +1,6 @@
 <?php
 /**
-* Plugin Name: AllSecure Open Woo - Schedule
+* Plugin Name: AllSecure Open Woo - Recurring
 * Plugin URI: https://www.allsecpay.com
 * Author: AllSecure 
 * Description: WooCommerce Plugin for accepting payments through AllSecure OPEN Platform.
@@ -286,7 +286,7 @@ function init_woocommerce_allsecure() {
 					
 			if ( isset( $this->cards_supported ) && '' !== $this->cards_supported ) {
 				foreach ( $this->cards_supported as $card ) {
-					$icons = plugins_url(). '/allsecure_woo/assets/images/general/' .strtolower( $card ) . '.svg';
+					$icons = plugin_dir_url( __FILE__ ). 'assets/images/general/' .strtolower( $card ) . '.svg';
 					$icon_html .= '<img src="' . $icons . '" alt="' . strtolower( $card ) . '" title="' . strtolower( $card ) . '" style="height:30px; margin:5px 0px 5px 10px; vertical-align: middle; float: none; display: inline; text-align: right;" />';
 				}
 			}

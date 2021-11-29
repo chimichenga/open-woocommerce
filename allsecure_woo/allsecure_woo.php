@@ -396,7 +396,7 @@ function init_woocommerce_allsecure() {
 						if($lang == 'sr'){
 							echo '$(".wpwl-button-pay").html("Plati");'. PHP_EOL;
 						}
-						echo 'var BannerHtml = "<div id=\"banner\"><div id=\"d1\"><img border=\"0\" src=\"' . plugins_url() .'/allsecure_woo/assets/images/general/3dmcsc.svg\" alt=\"MasterCard SecureCode\"></div><div id=\"d2\"><img border=\"0\" src=\"' . plugins_url() .'/allsecure_woo/assets/images/general/3dvbv.svg\" alt=\"VerifiedByVISA\"></div><div id=\"d3\"><img border=\"0\" src=\"' .plugins_url(). '/allsecure_woo/assets/images/general/3dasb.svg\" alt=\"Secure Payment\"></div></div>";
+						echo 'var BannerHtml = "<div id=\"banner\"><div id=\"d1\"><img border=\"0\" src=\"' . plugin_dir_url( __FILE__ ) .'assets/images/general/3dmcsc.svg\" alt=\"MasterCard SecureCode\"></div><div id=\"d2\"><img border=\"0\" src=\"' . plugin_dir_url( __FILE__ ) .'assets/images/general/3dvbv.svg\" alt=\"VerifiedByVISA\"></div><div id=\"d3\"><img border=\"0\" src=\"' .plugin_dir_url( __FILE__ ). 'assets/images/general/3dasb.svg\" alt=\"Secure Payment\"></div></div>";
 						$("form.wpwl-form-card").find(".wpwl-group-submit").after(BannerHtml);
 						$(".wpwl-group-cardNumber").after( $(".wpwl-group-cardHolder").detach());
 						var visa = $(".wpwl-brand:first").clone().removeAttr("class").attr("class", "wpwl-brand-card wpwl-brand-custom wpwl-brand-VISA");

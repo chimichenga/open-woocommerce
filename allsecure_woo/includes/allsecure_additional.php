@@ -197,7 +197,17 @@ function allsecure_cancel_recurring(){
 		echo 'You are not allowed on this page.';
 		exit;
 	}
-	update_post_meta( $_REQUEST['order'], 'AS_RecurringActive', 'no' );
+
+    $order_id = (int) $_REQUEST['order'];
+
+	$status = update_post_meta( $order_id, 'AS_RecurringActive', 'no' );
+    $order = wc_get_order($order_id);
+
+	if ( $status ) {
+	    $order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecure_woo') ));
+	} else {
+		$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecure_woo') ));
+	}
 	
 	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
 	exit;

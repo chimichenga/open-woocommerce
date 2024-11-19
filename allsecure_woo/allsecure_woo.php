@@ -305,7 +305,7 @@ function init_woocommerce_allsecure() {
 				$item = array_values($order_items)[0];
 				$product_id = $item->get_product_id();
 				$product = wc_get_product( $product_id );
-				if( $product->is_type('donation') && get_post_meta( $product_id, '_recurring_donation', true ) == 'yes')
+				if( $product->is_type('donation') && get_post_meta( $product_id, '_recurring_donation', true ) === 'yes' && $order->get_meta('AS_RecurringDuplicate') !== 'yes')
 					return true;
 				else
 					return false;

@@ -20,6 +20,7 @@ define( 'ALLSECURE_VERSION', '1.7.1' );
 function init_woocommerce_allsecure() {
 	load_plugin_textdomain( 'allsecure_woo', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/');
 	if ( ! class_exists( 'WC_Payment_Gateway' ) ) { return; }
+	#[AllowDynamicProperties]
 	class woocommerce_allsecure extends WC_Payment_Gateway {
 		
 		/**
